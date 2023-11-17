@@ -59,6 +59,7 @@ inline void hybrid_move_driver(const int N_total,
 
   if (rank == 0){
     nprint("Stencil width:", stencil_width);
+    nprint("Num MPI ranks:", sycl_target->comm_pair.size_parent);
     nprint("Num Particles requested:", N_total);
     nprint("Num Particles actual:", N_total_actual);
     nprint("Num Warm-up Steps:", Nsteps_warmup);
@@ -181,9 +182,20 @@ inline void hybrid_move_driver(const int N_total,
 }
 
 int main(int argc, char **argv) {
+  
+  int provided_thread_level;
+#ifndef NESO_PARTICLES_THREAD_LEVEL
+#define THREAD_LEVEL MPI_THREAD_FUNNELED
+#else
+#define THREADS_LEVEL NESO_PARTICLES_THREAD_LEVEL
+#endif
 
-  if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
+  if (MPI_Init_thread(&argc, &argv, THREAD_LEVEL, &provided_thread_level) != MPI_SUCCESS) {
     std::cout << "ERROR: MPI_Init != MPI_SUCCESS" << std::endl;
+    return -1;
+  }
+  if (provided_thread_level < THREAD_LEVEL) {
+    std::cout << "ERROR: provided thread level too low." << std::endl;
     return -1;
   }
  
@@ -195,6 +207,8 @@ int main(int argc, char **argv) {
       argsi.at(ix) = std::stoi(argv0);
     }
     hybrid_move_driver(argsi.at(0), argsi.at(1), argsi.at(2));
+  } else {
+    nprint("Insufficient number of args");
   }
 
 
