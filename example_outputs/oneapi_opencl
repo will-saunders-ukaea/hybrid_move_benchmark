@@ -1,0 +1,94 @@
+~/git-ukaea/hybrid_move_benchmark (main)$ rm -rf CMakeFiles ; cmake -DCMAKE_CXX_COMPILER=dpcpp -DCMAKE_BUILD_TYPE=Release .
+-- The CXX compiler identification is IntelLLVM 2022.1.0
+-- The C compiler identification is IntelLLVM 2022.1.0
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /opt/spack/linux-ubuntu22.04-cascadelake/gcc-11.2.0/intel-oneapi-compilers-2022.1.0-jdy4ljsgwsb7ssafnvgegy6pod6qwq23/compiler/2022.1.0/linux/bin/dpcpp - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /opt/spack/linux-ubuntu22.04-cascadelake/gcc-11.2.0/intel-oneapi-compilers-2022.1.0-jdy4ljsgwsb7ssafnvgegy6pod6qwq23/compiler/2022.1.0/linux/bin/icx - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Using NESO_PARTICLES_DEVICE_TYPE_CPU
+-- HDF5 found
+-- HDF5_IS_PARALLEL ON
+CMake Warning at CMakeLists.txt:17 (message):
+  hipsycl not found
+
+
+-- The SYCL compiler is /opt/spack/linux-ubuntu22.04-cascadelake/gcc-11.2.0/intel-oneapi-compilers-2022.1.0-jdy4ljsgwsb7ssafnvgegy6pod6qwq23/compiler/2022.1.0/linux/bin/dpcpp
+-- The SYCL Flags are --dpcpp -fsycl
+-- The SYCL Language Version is 202001
+-- -g -DNDEBUG -O3
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/js0259/git-ukaea/hybrid_move_benchmark
+~/git-ukaea/hybrid_move_benchmark (main)$ make -B > /tmp/ccstdout 2>&1
+~/git-ukaea/hybrid_move_benchmark (main)$ mpirun -n 12 ./bin/hybrid_move_bench 6000000 10 250
+Using Intel(R) Core(TM) i9-10920X CPU @ 3.50GHz
+Kernel type: CPU
+Stencil width: 1
+Num MPI ranks: 12
+Num Particles requested: 6000000
+Num Particles actual: 5999616
+Num Warm-up Steps: 10
+Num Steps: 250
+Particles Added...
+5999616 Particles Distributed...
+0
+0
+100
+200
+TIME TAKEN: 10.6394 PER STEP: 0.0425575
+CellDat:
+  set_nrow: 444500 | 0.268024
+CellMove:
+  cell_move: 250 | 0.126033
+  move: 250 | 1.40139
+  remove_particles: 250 | 0.176174
+DepartingIdentify:
+  identify: 500 | 0.817321
+GlobalMove:
+  move: 250 | 1.11971
+  move_stage_0: 250 | 0.992328
+  move_stage_1: 250 | 0.992956
+  move_stage_2: 250 | 0.993176
+  move_stage_3: 250 | 1.08989
+  move_stage_m1: 250 | 0.425288
+  move_stage_m2: 250 | 0.415511
+  move_stage_m3: 250 | 0.0031588
+  npart_exchange_sendrecv: 250 | 0.541353
+GlobalMoveExchange:
+  RMA: 250 | 1.4829e-05
+  exchange_init: 250 | 8.0911e-05
+  npart_exchange_sendrecv: 250 | 0.471254
+  npart_exchange_sendrecv_post_wait: 250 | 0.469996
+  npart_exchange_sendrecv_pre_wait: 250 | 4.4777e-05
+  npart_send_recv: 250 | 0.0698799
+LayerCompressor:
+  compute_remove_compress_indicies: 750 | 0.113952
+  dat_trimming: 750 | 0.0539418
+  dat_trimming_wait: 750 | 0.000364374
+  data_movement: 750 | 0.206223
+  host_npart_setting: 750 | 0.00131038
+  remove_particles: 750 | 0.379164
+LocalMove:
+  Move: 250 | 0.68198
+MeshHierarchyGlobalMap:
+  execute: 250 | 0.325044
+ParticleLoop:
+  Avection: 250 | 0.79885
+  CartesianCellBin: 250 | 0.864742
+  CartesianHMeshLocalMapper: 500 | 1.0514
+  CartesianPeriodicPBC: 250 | 3.8487
+  DepartingIdentify: 500 | 0.757412
+  Init: 2500 | 0.00175945
+  cell_move_identify: 250 | 0.351913
+  global_map_stage_0: 250 | 0.262636
+  reset_mpi_ranks: 250 | 0.498136
+ParticlePacker:
+  pack_prepare: 500 | 0.0218687
+ParticleUnpacker:
+  unpack_prepare: 500 | 0.0480594
