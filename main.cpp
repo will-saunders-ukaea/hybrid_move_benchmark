@@ -105,7 +105,7 @@ inline void hybrid_move_driver(const int N_total,
   auto ccb = std::make_shared<CartesianCellBin>(sycl_target, mesh, A->position_dat, A->cell_id_dat);
 
   // This creates a ParticleLoop to apply the advection.
-  ParticleLoop advect_new(
+  auto advect_loop = particle_loop(
     "Avection",
     A,
     [=](auto V, auto P){
@@ -140,11 +140,11 @@ inline void hybrid_move_driver(const int N_total,
     // Move particles into owning cells.
     A->cell_move();
 
-
     // Uncomment to write a trajectory.
     //h5part.write();
     
-    advect_new.execute();
+    // Execute the advection particle loop.
+    advect_loop->execute();
 
     T += dt;
     
@@ -164,7 +164,7 @@ inline void hybrid_move_driver(const int N_total,
     A->hybrid_move();
     ccb->execute();
     A->cell_move();
-    advect_new.execute();
+    advect_loop->execute();
     T += dt;   
     if( (stepx % 100 == 0) && (rank == 0)) {
       std::cout << stepx << std::endl;
