@@ -12,52 +12,56 @@ inline void hybrid_move_driver(const int N_total,
   const int Nsteps_warmup = 1024,
   const int Nsteps = 2048
 ){
-
+  
+  // Time step size.
+  const REAL dt = 0.001;
+  // Number of spatial dimensions.
   const int ndim = 2;
   std::vector<int> dims(ndim);
+  // Number of coarse cells in the mesh in each dimension.
   dims[0] = 16;
   dims[1] = 16;
-
+  // Extent of each coarse cell in each dimension.
   const double cell_extent = 1.0;
+  // Number of times to subdivide each coarse cell to create the mesh.
   const int subdivision_order = 1;
+  // Halo width for local move.
   const int stencil_width = 1;
-  
-  const int global_cell_count = dims[0] * dims[1] * std::pow(std::pow(2, subdivision_order), ndim);
-  const int npart_per_cell = std::round((double) N_total / (double) global_cell_count);
-
+  // Create the mesh.
   auto mesh = std::make_shared<CartesianHMesh>(MPI_COMM_WORLD, ndim, dims, cell_extent,
                       subdivision_order, stencil_width);
-
+  // Create a container that wraps a sycl queue and a MPI communicator.
   auto sycl_target = std::make_shared<SYCLTarget>(0, mesh->get_comm());
-
+  // Object to map particle positions into cells.
   auto cart_local_mapper = CartesianHMeshLocalMapper(sycl_target, mesh);
-
+  // Create a domain from a mesh and a rule to map local cells to owning mpi ranks.
   auto domain = std::make_shared<Domain>(mesh, cart_local_mapper);
 
+  // The specification of the particle properties.
   ParticleSpec particle_spec{ParticleProp(Sym<REAL>("P"), ndim, true),
                              ParticleProp(Sym<REAL>("V"), ndim),
                              ParticleProp(Sym<INT>("CELL_ID"), 1, true),
                              ParticleProp(Sym<INT>("ID"), 1)};
-
+  
+  // Create a ParticleGroup from a domain, particle specification and a compute
+  // target.
   auto A = std::make_shared<ParticleGroup>(domain, particle_spec, sycl_target);
 
-  A->add_particle_dat(ParticleDat(sycl_target, ParticleProp(Sym<REAL>("FOO"), 3),
-                                 domain->mesh->get_cell_count()));
-
+  // Spawn particles cells wise to be close to the requested number of
+  // particles globally.
   const int rank = sycl_target->comm_pair.rank_parent;
   const int size = sycl_target->comm_pair.size_parent;
-
   std::mt19937 rng_pos(52234234 + rank);
   std::mt19937 rng_vel(52234231 + rank);
   std::mt19937 rng_rank(18241);
-  
-
-  const REAL dt = 0.001;
   const int cell_count = domain->mesh->get_cell_count();
+  const int global_cell_count = dims[0] * dims[1] * std::pow(std::pow(2, subdivision_order), ndim);
+  const int npart_per_cell = std::round((double) N_total / (double) global_cell_count);
   const int N = npart_per_cell * cell_count;
   const int N_total_actual = npart_per_cell * global_cell_count;
 
   if (rank == 0){
+    sycl_target->print_device_info();
     nprint("Stencil width:", stencil_width);
     nprint("Num MPI ranks:", sycl_target->comm_pair.size_parent);
     nprint("Num Particles requested:", N_total);
@@ -67,35 +71,40 @@ inline void hybrid_move_driver(const int N_total,
   }
   
   if (N > 0){
-  std::vector<std::vector<double>> positions;
-  std::vector<int> cells;
-  uniform_within_cartesian_cells(mesh, npart_per_cell, positions, cells, rng_pos);
-
-  auto velocities = NESO::Particles::normal_distribution(
-      N, ndim, 0.0, 0.5, rng_vel);
-  std::uniform_int_distribution<int> uniform_dist(
-      0, size - 1);
-  ParticleSet initial_distribution(N, A->get_particle_spec());
-  for (int px = 0; px < N; px++) {
-    for (int dimx = 0; dimx < ndim; dimx++) {
-      initial_distribution[Sym<REAL>("P")][px][dimx] = positions.at(dimx).at(px);
-      initial_distribution[Sym<REAL>("V")][px][dimx] = velocities.at(dimx).at(px);
+    std::vector<std::vector<double>> positions;
+    std::vector<int> cells;
+    // Sample particles randomly in each local cell.
+    uniform_within_cartesian_cells(mesh, npart_per_cell, positions, cells, rng_pos);
+    // Sample some particle velocities.
+    auto velocities = NESO::Particles::normal_distribution(
+        N, ndim, 0.0, 0.5, rng_vel);
+    std::uniform_int_distribution<int> uniform_dist(
+        0, size - 1);
+    // Host space to store the created particles.
+    ParticleSet initial_distribution(N, A->get_particle_spec());
+    // Populate the host space with particle data.
+    for (int px = 0; px < N; px++) {
+      for (int dimx = 0; dimx < ndim; dimx++) {
+        initial_distribution[Sym<REAL>("P")][px][dimx] = positions.at(dimx).at(px);
+        initial_distribution[Sym<REAL>("V")][px][dimx] = velocities.at(dimx).at(px);
+      }
+      initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
+      initial_distribution[Sym<INT>("ID")][px][0] = px;
     }
-    initial_distribution[Sym<INT>("CELL_ID")][px][0] = cells.at(px);
-    initial_distribution[Sym<INT>("ID")][px][0] = px;
+    // Add the particles to the ParticleGroup
+    A->add_particles_local(initial_distribution);
   }
-  A->add_particles_local(initial_distribution);
-  }
-  //parallel_advection_initialisation(A, 64);
 
   if (rank == 0){
     std::cout << "Particles Added..." << std::endl;
   }
-
+  
+  // Create object to apply periodic boundary conditions.
   auto pbc = std::make_shared<CartesianPeriodic>(sycl_target, mesh, A->position_dat);
+  // Create object to map particle positions to mesh cells.
   auto ccb = std::make_shared<CartesianCellBin>(sycl_target, mesh, A->position_dat, A->cell_id_dat);
 
-
+  // This creates a ParticleLoop to apply the advection.
   ParticleLoop advect_new(
     "Avection",
     A,
@@ -108,29 +117,31 @@ inline void hybrid_move_driver(const int N_total,
     Access::write(Sym<REAL>("P"))
   );
 
-
-  REAL T = 0.0;
- 
-  pbc->execute();
-  A->hybrid_move();
-  ccb->execute();
-  A->cell_move();
-
   MPI_Barrier(sycl_target->comm_pair.comm_parent);
   if (rank == 0){
     std::cout << N_total_actual << " Particles Distributed..." << std::endl;
   }
-
+  
+  // Uncomment to write a trajectory.
   //H5Part h5part("traj.h5part", A, Sym<REAL>("P"), Sym<INT>("CELL_ID"));
 
+  REAL T = 0.0;
   for (int stepx = 0; stepx < Nsteps_warmup; stepx++) {
-
+    
+    // Apply periodic boundary conditions.
     pbc->execute();
-
+    
+    // Move particles between MPI ranks.
     A->hybrid_move();
-
+    
+    // Bin particles into cells (determine the owning cell).
     ccb->execute();
+
+    // Move particles into owning cells.
     A->cell_move();
+
+
+    // Uncomment to write a trajectory.
     //h5part.write();
     
     advect_new.execute();
@@ -141,23 +152,19 @@ inline void hybrid_move_driver(const int N_total,
       std::cout << stepx << std::endl;
     }
   }
+
+  // Uncomment to write a trajectory.
   //h5part.close();
   sycl_target->profile_map.reset();
 
   std::chrono::high_resolution_clock::time_point time_start = std::chrono::high_resolution_clock::now();
 
   for (int stepx = 0; stepx < Nsteps; stepx++) {
-
-
     pbc->execute();
-
     A->hybrid_move();
-
     ccb->execute();
     A->cell_move();
     advect_new.execute();
-
-
     T += dt;   
     if( (stepx % 100 == 0) && (rank == 0)) {
       std::cout << stepx << std::endl;
@@ -172,7 +179,7 @@ inline void hybrid_move_driver(const int N_total,
     std::cout << "TIME TAKEN: " << time_taken_double << " PER STEP: " << time_taken_double / Nsteps << std::endl;
   }
 
-
+  A->free();
   mesh->free();
   
   if (rank == 0){
@@ -208,7 +215,7 @@ int main(int argc, char **argv) {
     }
     hybrid_move_driver(argsi.at(0), argsi.at(1), argsi.at(2));
   } else {
-    nprint("Insufficient number of args");
+    nprint("Insufficient number of arguments. Please pass: <number of particles> <number of warmup steps> <number of timed steps>.");
   }
 
 

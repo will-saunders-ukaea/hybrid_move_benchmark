@@ -1,0 +1,85 @@
+~/git-ukaea/hybrid_move_benchmark (main)$ module list
+Currently Loaded Modulefiles:
+ 1) arpack-ng-3.8.0-gcc-11.2.0-asz3s3b   5) fftw-3.3.10-gcc-11.2.0-lfxsi4w           9) hdf5-1.12.2-gcc-11.2.0-6fgdd5g
+ 2) boost-1.80.0-gcc-11.2.0-kvs5bid      6) googletest-1.10.0-gcc-11.2.0-icv45al    10) NESO-hipsycl-build-0.9.4-boost-1.80
+ 3) tinyxml-2.6.2-gcc-11.2.0-sfrz2zb     7) nektar-5.3.0-2e0fb8-gcc-11.2.0-nurqixe
+ 4) hipsycl-0.9.4-gcc-11.2.0-wmlycr6     8) scotch-6.0.4-gcc-11.2.0-miae2nn
+
+Key:
+auto-loaded
+~/git-ukaea/hybrid_move_benchmark (main)$ lscpu | grep "Model name"
+Model name:                         Intel(R) Core(TM) i9-10920X CPU @ 3.50GHz
+~/git-ukaea/hybrid_move_benchmark (main)$ cmake -DHIPSYCL_TARGETS=omp.accelerated -DCMAKE_BUILD_TYPE=Release .
+-- Using NESO_PARTICLES_DEVICE_TYPE_CPU
+-- HDF5 found
+-- HDF5_IS_PARALLEL ON
+-- hipsycl found
+-- -g -DNDEBUG -O3
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/js0259/git-ukaea/hybrid_move_benchmark
+~/git-ukaea/hybrid_move_benchmark (main)$ make -B > /tmp/ccstdout 2>&1
+~/git-ukaea/hybrid_move_benchmark (main)$ OMP_NUM_THREADS=1 mpirun -n 12 ./bin/hybrid_move_bench 6000000 10 250
+Stencil width: 1
+Num MPI ranks: 12
+Num Particles requested: 6000000
+Num Particles actual: 5999616
+Num Warm-up Steps: 10
+Num Steps: 250
+Particles Added...
+5999616 Particles Distributed...
+0
+0
+100
+200
+TIME TAKEN: 11.8917 PER STEP: 0.0475666
+CellDat:
+  set_nrow: 444500 | 0.0542734
+CellMove:
+  cell_move: 250 | 0.0911718
+  move: 250 | 0.739837
+  remove_particles: 250 | 0.0935797
+DepartingIdentify:
+  identify: 500 | 0.72208
+GlobalMove:
+  move: 250 | 2.26854
+  move_stage_0: 250 | 2.11308
+  move_stage_1: 250 | 2.12304
+  move_stage_2: 250 | 2.12383
+  move_stage_3: 250 | 2.20182
+  move_stage_m1: 250 | 0.328385
+  move_stage_m2: 250 | 0.323736
+  move_stage_m3: 250 | 0.00710026
+  npart_exchange_sendrecv: 250 | 1.77561
+GlobalMoveExchange:
+  RMA: 250 | 1.8861e-05
+  exchange_init: 250 | 0.000303285
+  npart_exchange_sendrecv: 250 | 1.61487
+  npart_exchange_sendrecv_post_wait: 250 | 1.61288
+  npart_exchange_sendrecv_pre_wait: 250 | 4.0299e-05
+  npart_send_recv: 250 | 0.16043
+LayerCompressor:
+  compute_remove_compress_indicies: 750 | 0.0859375
+  dat_trimming: 750 | 0.0537391
+  dat_trimming_wait: 750 | 0.000440239
+  data_movement: 750 | 0.103583
+  host_npart_setting: 750 | 0.00175702
+  remove_particles: 750 | 0.24865
+LocalMove:
+  Move: 250 | 0.948513
+MeshHierarchyGlobalMap:
+  execute: 250 | 0.259436
+ParticleLoop:
+  Avection: 250 | 0.964407
+  CartesianCellBin: 250 | 1.1814
+  CartesianHMeshLocalMapper: 500 | 1.43395
+  CartesianPeriodicPBC: 250 | 3.71194
+  DepartingIdentify: 500 | 0.68423
+  Init: 2500 | 0.00132039
+  cell_move_identify: 250 | 0.301704
+  global_map_stage_0: 250 | 0.2103
+  reset_mpi_ranks: 250 | 0.33454
+ParticlePacker:
+  pack_prepare: 500 | 0.0165901
+ParticleUnpacker:
+  unpack_prepare: 500 | 0.110985

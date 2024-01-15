@@ -1,0 +1,76 @@
+~/git-ukaea/hybrid_move_benchmark (main)$ cmake -DHIPSYCL_TARGETS=cuda-nvcxx -DCMAKE_BUILD_TYPE=Release .
+-- Using NESO_PARTICLES_DEVICE_TYPE_CPU
+-- HDF5 found
+-- HDF5_IS_PARALLEL ON
+-- hipsycl found
+-- -g -DNDEBUG -O3
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /home/js0259/git-ukaea/hybrid_move_benchmark
+~/git-ukaea/hybrid_move_benchmark (main)$ make -B > /tmp/ccstdout 2>&1
+~/git-ukaea/hybrid_move_benchmark (main)$ OMP_NUM_THREADS=1 mpirun -n 4 ./bin/hybrid_move_bench 6000000 10 250
+Using Quadro P2200
+Kernel type: CPU
+Stencil width: 1
+Num MPI ranks: 4
+Num Particles requested: 6000000
+Num Particles actual: 5999616
+Num Warm-up Steps: 10
+Num Steps: 250
+Particles Added...
+5999616 Particles Distributed...
+0
+0
+100
+200
+TIME TAKEN: 6.40033 PER STEP: 0.0256013
+CellDat:
+  set_nrow: 1283250 | 0.405567
+CellMove:
+  cell_move: 250 | 0.0724272
+  move: 250 | 2.12317
+  remove_particles: 250 | 0.353342
+DepartingIdentify:
+  identify: 500 | 0.329299
+GlobalMove:
+  move: 250 | 1.52483
+  move_stage_0: 250 | 0.982203
+  move_stage_1: 250 | 1.01211
+  move_stage_2: 250 | 1.01253
+  move_stage_3: 250 | 1.24301
+  move_stage_m1: 250 | 0.212147
+  move_stage_m2: 250 | 0.163944
+  move_stage_m3: 250 | 0.00920537
+  npart_exchange_sendrecv: 250 | 0.70548
+GlobalMoveExchange:
+  RMA: 250 | 2.325e-05
+  exchange_init: 250 | 0.000138164
+  npart_exchange_sendrecv: 250 | 0.636944
+  npart_exchange_sendrecv_post_wait: 250 | 0.635037
+  npart_exchange_sendrecv_pre_wait: 250 | 4.0987e-05
+  npart_send_recv: 250 | 0.0682642
+LayerCompressor:
+  compute_remove_compress_indicies: 750 | 0.432366
+  dat_trimming: 750 | 0.179216
+  dat_trimming_wait: 750 | 0.000332749
+  data_movement: 750 | 0.21354
+  host_npart_setting: 750 | 0.00174017
+  remove_particles: 750 | 0.829324
+LocalMove:
+  Move: 250 | 0.941964
+MeshHierarchyGlobalMap:
+  execute: 250 | 0.449946
+ParticleLoop:
+  Avection: 250 | 0.177405
+  CartesianCellBin: 250 | 0.179267
+  CartesianHMeshLocalMapper: 500 | 0.289762
+  CartesianPeriodicPBC: 250 | 0.196384
+  DepartingIdentify: 500 | 0.163641
+  Init: 2500 | 0.00113794
+  cell_move_identify: 250 | 0.140132
+  global_map_stage_0: 250 | 0.0950434
+  reset_mpi_ranks: 250 | 0.107963
+ParticlePacker:
+  pack_prepare: 500 | 0.111578
+ParticleUnpacker:
+  unpack_prepare: 500 | 0.492471
