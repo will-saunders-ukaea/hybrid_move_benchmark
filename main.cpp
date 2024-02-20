@@ -8,7 +8,10 @@
 using namespace cl;
 using namespace NESO::Particles;
 
-inline void hybrid_move_driver(const int N_total, 
+inline void hybrid_move_driver(
+  const bool single_cell_mode,
+  const int N_total, 
+  const int Ncells = 16,
   const int Nsteps_warmup = 1024,
   const int Nsteps = 2048
 ){
@@ -19,17 +22,19 @@ inline void hybrid_move_driver(const int N_total,
   const int ndim = 2;
   std::vector<int> dims(ndim);
   // Number of coarse cells in the mesh in each dimension.
-  dims[0] = 16;
-  dims[1] = 16;
+  dims[0] = Ncells;
+  dims[1] = Ncells;
   // Extent of each coarse cell in each dimension.
   const double cell_extent = 1.0;
   // Number of times to subdivide each coarse cell to create the mesh.
-  const int subdivision_order = 1;
+  const int subdivision_order = 0;
   // Halo width for local move.
-  const int stencil_width = 1;
+  const int stencil_width = 2;
   // Create the mesh.
   auto mesh = std::make_shared<CartesianHMesh>(MPI_COMM_WORLD, ndim, dims, cell_extent,
                       subdivision_order, stencil_width);
+  mesh->single_cell_mode = single_cell_mode;
+
   // Create a container that wraps a sycl queue and a MPI communicator.
   auto sycl_target = std::make_shared<SYCLTarget>(0, mesh->get_comm());
   // Object to map particle positions into cells.
@@ -54,20 +59,25 @@ inline void hybrid_move_driver(const int N_total,
   std::mt19937 rng_pos(52234234 + rank);
   std::mt19937 rng_vel(52234231 + rank);
   std::mt19937 rng_rank(18241);
-  const int cell_count = domain->mesh->get_cell_count();
+  const int cart_cell_count = mesh->get_cart_cell_count();
   const int global_cell_count = dims[0] * dims[1] * std::pow(std::pow(2, subdivision_order), ndim);
-  const int npart_per_cell = std::round((double) N_total / (double) global_cell_count);
-  const int N = npart_per_cell * cell_count;
+  const int npart_per_cell = std::max((INT)std::round((double) N_total / (double) global_cell_count), (INT)1);
+  const int N = npart_per_cell * cart_cell_count;
   const int N_total_actual = npart_per_cell * global_cell_count;
 
   if (rank == 0){
     sycl_target->print_device_info();
+    nprint("NP   Cell Count:", mesh->get_cell_count());
+    nprint("Mesh Cell Count:", cart_cell_count);
+    nprint("Global Cell Count:", global_cell_count);
+    nprint("Single Cell Mode:", single_cell_mode);
     nprint("Stencil width:", stencil_width);
     nprint("Num MPI ranks:", sycl_target->comm_pair.size_parent);
     nprint("Num Particles requested:", N_total);
     nprint("Num Particles actual:", N_total_actual);
     nprint("Num Warm-up Steps:", Nsteps_warmup);
     nprint("Num Steps:", Nsteps);
+    nprint("Num cells per dimension:", Ncells);
   }
   
   if (N > 0){
@@ -134,11 +144,13 @@ inline void hybrid_move_driver(const int N_total,
     // Move particles between MPI ranks.
     A->hybrid_move();
     
-    // Bin particles into cells (determine the owning cell).
-    ccb->execute();
+    if (!single_cell_mode){
+      // Bin particles into cells (determine the owning cell).
+      ccb->execute();
 
-    // Move particles into owning cells.
-    A->cell_move();
+      // Move particles into owning cells.
+      A->cell_move();
+    }
 
     // Uncomment to write a trajectory.
     //h5part.write();
@@ -154,22 +166,30 @@ inline void hybrid_move_driver(const int N_total,
   }
 
   // Uncomment to write a trajectory.
-  //h5part.close();
+  // h5part.close();
   sycl_target->profile_map.reset();
 
   std::chrono::high_resolution_clock::time_point time_start = std::chrono::high_resolution_clock::now();
-
-  for (int stepx = 0; stepx < Nsteps; stepx++) {
-    pbc->execute();
-    A->hybrid_move();
-    ccb->execute();
-    A->cell_move();
-    advect_loop->execute();
-    T += dt;   
-    if( (stepx % 100 == 0) && (rank == 0)) {
-      std::cout << stepx << std::endl;
+  
+  auto lambda_do_run = [&](){
+    for (int stepx = 0; stepx < Nsteps; stepx++) {
+      pbc->execute();
+      A->hybrid_move();
+      if (!single_cell_mode){
+        // Bin particles into cells (determine the owning cell).
+        ccb->execute();
+        // Move particles into owning cells.
+        A->cell_move();
+      }
+      advect_loop->execute();
+      T += dt;   
+      if( (stepx % 100 == 0) && (rank == 0)) {
+        std::cout << stepx << std::endl;
+      }
     }
-  }
+  };
+
+  lambda_do_run();
 
   std::chrono::high_resolution_clock::time_point time_end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> time_taken = time_end - time_start;
@@ -205,17 +225,17 @@ int main(int argc, char **argv) {
     std::cout << "ERROR: provided thread level too low." << std::endl;
     return -1;
   }
- 
-  if (argc > 3){
-
-    std::vector<int> argsi(3);
-    for(int ix=0 ; ix<3 ; ix++){
+  
+  const int nargs = 5;
+  if (argc > nargs){
+    std::vector<int> argsi(nargs);
+    for(int ix=0 ; ix<nargs ; ix++){
       std::string argv0 = std::string(argv[ix+1]);
       argsi.at(ix) = std::stoi(argv0);
     }
-    hybrid_move_driver(argsi.at(0), argsi.at(1), argsi.at(2));
+    hybrid_move_driver((bool) argsi.at(0), argsi.at(1), argsi.at(2), argsi.at(3), argsi.at(4));
   } else {
-    nprint("Insufficient number of arguments. Please pass: <number of particles> <number of warmup steps> <number of timed steps>.");
+    nprint("Insufficient number of arguments. Please pass: <mode> <number of particles> <number of cells> <number of warmup steps> <number of timed steps>.");
   }
 
 
