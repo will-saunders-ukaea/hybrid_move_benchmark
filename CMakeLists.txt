@@ -1,11 +1,17 @@
 cmake_minimum_required(VERSION 3.14)
 
+
 project(
   NESO-Workspace-hybrid-move
   VERSION 0.0.1
   LANGUAGES CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
+
+#message(STATUS "VT_ROOT" $ENV{VT_ROOT})
+#include_directories($ENV{VT_ROOT}/include)
+#link_directories($ENV{VT_ROOT}/lib)
+#add_link_options($ENV{VT_ADD_LIBS})
 
 # find MPI
 find_package(MPI REQUIRED)

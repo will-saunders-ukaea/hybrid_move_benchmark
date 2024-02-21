@@ -34,6 +34,7 @@ inline void hybrid_move_driver(
   auto mesh = std::make_shared<CartesianHMesh>(MPI_COMM_WORLD, ndim, dims, cell_extent,
                       subdivision_order, stencil_width);
   mesh->single_cell_mode = single_cell_mode;
+  nprint("Num Owned Cells:", mesh->get_owned_cells().size());
 
   // Create a container that wraps a sycl queue and a MPI communicator.
   auto sycl_target = std::make_shared<SYCLTarget>(0, mesh->get_comm());
@@ -167,21 +168,39 @@ inline void hybrid_move_driver(
 
   // Uncomment to write a trajectory.
   // h5part.close();
+  MPI_Barrier(sycl_target->comm_pair.comm_parent);
   sycl_target->profile_map.reset();
 
   std::chrono::high_resolution_clock::time_point time_start = std::chrono::high_resolution_clock::now();
   
+  auto comm = sycl_target->comm_pair.comm_parent;
+
   auto lambda_do_run = [&](){
     for (int stepx = 0; stepx < Nsteps; stepx++) {
+      ProfileRegion r0("main", "pbc");
       pbc->execute();
+      r0.end();
+      sycl_target->profile_map.add_region(r0);
+
+      ProfileRegion r1("main", "hybrid_move");
       A->hybrid_move();
+      r1.end();
+      sycl_target->profile_map.add_region(r1);
+
+      //A->local_move();
+      //MPI_Barrier(comm);
       if (!single_cell_mode){
         // Bin particles into cells (determine the owning cell).
         ccb->execute();
         // Move particles into owning cells.
         A->cell_move();
       }
+
+      ProfileRegion r2("main", "advect_loop");
       advect_loop->execute();
+      r2.end();
+      sycl_target->profile_map.add_region(r2);
+
       T += dt;   
       if( (stepx % 100 == 0) && (rank == 0)) {
         std::cout << stepx << std::endl;
@@ -202,10 +221,11 @@ inline void hybrid_move_driver(
   A->free();
   mesh->free();
   
-  if (rank == 0){
+  //if (rank == 0){
     sycl_target->profile_map.print();
-  }
+  //}
 
+  sycl_target->profile_map.write_events_json("hybrid_move_events", rank);
 }
 
 int main(int argc, char **argv) {
