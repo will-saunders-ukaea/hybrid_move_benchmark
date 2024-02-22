@@ -2,7 +2,7 @@
 #include <mpi.h>
 #include <neso_particles.hpp>
 #include <chrono>
-#include <csignal>
+#include <cmath>
 #include <string>
 
 using namespace cl;
@@ -15,19 +15,23 @@ inline void hybrid_move_driver(
   const int Nsteps_warmup = 1024,
   const int Nsteps = 2048
 ){
-  
+ 
+  // Extent of each coarse cell in each dimension.
+  const double cell_extent = 1.0;
+  // Number of times to subdivide each coarse cell to create the mesh.
+  const int subdivision_order = 0;
+  const REAL fine_cell_extent = cell_extent / std::pow(2.0, subdivision_order);
+  // thermal velocity scaling
+  const REAL v_sigma = 0.5;
   // Time step size.
-  const REAL dt = 0.001;
+  const REAL dt = 0.25 * fine_cell_extent / v_sigma;
   // Number of spatial dimensions.
   const int ndim = 2;
   std::vector<int> dims(ndim);
   // Number of coarse cells in the mesh in each dimension.
   dims[0] = Ncells;
   dims[1] = Ncells;
-  // Extent of each coarse cell in each dimension.
-  const double cell_extent = 1.0;
-  // Number of times to subdivide each coarse cell to create the mesh.
-  const int subdivision_order = 0;
+
   // Halo width for local move.
   const int stencil_width = 2;
   // Create the mesh.
@@ -68,6 +72,7 @@ inline void hybrid_move_driver(
 
   if (rank == 0){
     sycl_target->print_device_info();
+    nprint("dt:", dt);
     nprint("NP   Cell Count:", mesh->get_cell_count());
     nprint("Mesh Cell Count:", cart_cell_count);
     nprint("Global Cell Count:", global_cell_count);
@@ -88,7 +93,7 @@ inline void hybrid_move_driver(
     uniform_within_cartesian_cells(mesh, npart_per_cell, positions, cells, rng_pos);
     // Sample some particle velocities.
     auto velocities = NESO::Particles::normal_distribution(
-        N, ndim, 0.0, 0.5, rng_vel);
+        N, ndim, 0.0, v_sigma, rng_vel);
     std::uniform_int_distribution<int> uniform_dist(
         0, size - 1);
     // Host space to store the created particles.
@@ -126,7 +131,7 @@ inline void hybrid_move_driver(
         const REAL p_old = P.at(dx);
         const REAL p_new = p_old + dt * V.at(dx);
         const REAL tmp_extent = EXTENTS.at(dx);
-        const int n_extent_offset_int = abs(p_new);
+        const int n_extent_offset_int = abs((int)p_new);
         const REAL n_extent_offset_real = n_extent_offset_int + 2;
         const REAL p_pbc = 
           fmod(p_new + n_extent_offset_real * tmp_extent, tmp_extent);
@@ -158,7 +163,7 @@ inline void hybrid_move_driver(
   }
   
   // Uncomment to write a trajectory.
-  //H5Part h5part("traj.h5part", A, Sym<REAL>("P"), Sym<INT>("CELL_ID"));
+  //H5Part h5part("traj.h5part", A, Sym<REAL>("P"), Sym<REAL>("V"), Sym<INT>("CELL_ID"), Sym<INT>("ID"));
 
   REAL T = 0.0;
   for (int stepx = 0; stepx < Nsteps_warmup; stepx++) {
@@ -192,7 +197,7 @@ inline void hybrid_move_driver(
   }
 
   // Uncomment to write a trajectory.
-  // h5part.close();
+  //h5part.close();
   MPI_Barrier(sycl_target->comm_pair.comm_parent);
   sycl_target->profile_map.reset();
 
@@ -207,13 +212,12 @@ inline void hybrid_move_driver(
       //r0.end();
       //sycl_target->profile_map.add_region(r0);
 
+      MPI_Barrier(comm);
       ProfileRegion r1("main", "hybrid_move");
       A->hybrid_move();
       r1.end();
       sycl_target->profile_map.add_region(r1);
 
-      //A->local_move();
-      //MPI_Barrier(comm);
       if (!single_cell_mode){
         // Bin particles into cells (determine the owning cell).
         ccb->execute();
