@@ -115,6 +115,30 @@ inline void hybrid_move_driver(
   // Create object to map particle positions to mesh cells.
   auto ccb = std::make_shared<CartesianCellBin>(sycl_target, mesh, A->position_dat, A->cell_id_dat);
 
+  std::vector<REAL> extents = {dims[0] * cell_extent, dims[1] * cell_extent};
+  auto la_extents = std::make_shared<LocalArray<REAL>>(sycl_target, extents);
+
+  auto advect_pbc_loop = particle_loop(
+    "AvectionPBC",
+    A,
+    [=](auto V, auto P, auto EXTENTS){
+      for(int dx=0 ; dx<ndim ; dx++){
+        const REAL p_old = P.at(dx);
+        const REAL p_new = p_old + dt * V.at(dx);
+        const REAL tmp_extent = EXTENTS.at(dx);
+        const int n_extent_offset_int = abs(p_new);
+        const REAL n_extent_offset_real = n_extent_offset_int + 2;
+        const REAL p_pbc = 
+          fmod(p_new + n_extent_offset_real * tmp_extent, tmp_extent);
+        P.at(dx) = p_pbc;
+      }
+    },
+    Access::read(Sym<REAL>("V")),
+    Access::write(Sym<REAL>("P")),
+    Access::read(la_extents)
+  );
+
+
   // This creates a ParticleLoop to apply the advection.
   auto advect_loop = particle_loop(
     "Avection",
@@ -140,7 +164,7 @@ inline void hybrid_move_driver(
   for (int stepx = 0; stepx < Nsteps_warmup; stepx++) {
     
     // Apply periodic boundary conditions.
-    pbc->execute();
+    // pbc->execute();
     
     // Move particles between MPI ranks.
     A->hybrid_move();
@@ -157,7 +181,8 @@ inline void hybrid_move_driver(
     //h5part.write();
     
     // Execute the advection particle loop.
-    advect_loop->execute();
+    // advect_loop->execute();
+    advect_pbc_loop->execute();
 
     T += dt;
     
@@ -177,10 +202,10 @@ inline void hybrid_move_driver(
 
   auto lambda_do_run = [&](){
     for (int stepx = 0; stepx < Nsteps; stepx++) {
-      ProfileRegion r0("main", "pbc");
-      pbc->execute();
-      r0.end();
-      sycl_target->profile_map.add_region(r0);
+      //ProfileRegion r0("main", "pbc");
+      //pbc->execute();
+      //r0.end();
+      //sycl_target->profile_map.add_region(r0);
 
       ProfileRegion r1("main", "hybrid_move");
       A->hybrid_move();
@@ -196,8 +221,13 @@ inline void hybrid_move_driver(
         A->cell_move();
       }
 
-      ProfileRegion r2("main", "advect_loop");
-      advect_loop->execute();
+      //ProfileRegion r2("main", "advect_loop");
+      //advect_loop->execute();
+      //r2.end();
+      //sycl_target->profile_map.add_region(r2);
+      
+      ProfileRegion r2("main", "advect_pbc_loop");
+      advect_pbc_loop->execute();
       r2.end();
       sycl_target->profile_map.add_region(r2);
 
@@ -221,9 +251,9 @@ inline void hybrid_move_driver(
   A->free();
   mesh->free();
   
-  //if (rank == 0){
+  if (rank == 0){
     sycl_target->profile_map.print();
-  //}
+  }
 
   sycl_target->profile_map.write_events_json("hybrid_move_events", rank);
 }
