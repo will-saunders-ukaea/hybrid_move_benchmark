@@ -9,12 +9,10 @@ set(CMAKE_CXX_STANDARD 17)
 
 # find MPI
 find_package(MPI REQUIRED)
-find_package(NESO-PARTICLES REQUIRED)
+find_package(NESO-Particles REQUIRED)
 
 # put all targets in bin
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-# put all libraries in lib
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE "RelWithDebInfo")
@@ -32,12 +30,11 @@ set(EXECUTABLE_SOURCE main.cpp)
 
 add_executable(${EXECUTABLE} ${EXECUTABLE_SOURCE})
 
-#target_include_directories(${EXECUTABLE} PRIVATE ${NESO_PARTICLES_INCLUDE_PATH}
-#                                                 ${MPI_CXX_INCLUDE_PATH})
-#target_link_libraries(
-#  ${EXECUTABLE}
-#  PRIVATE ${MPI_CXX_LINK_FLAGS} ${MPI_CXX_LIBRARIES}
-#          ${NESO_PARTICLES_LIBRARIES} ${NESO_PARTICLES_LINK_FLAGS})
+target_include_directories(${EXECUTABLE} PRIVATE ${MPI_CXX_INCLUDE_PATH})
+target_link_libraries(
+  ${EXECUTABLE}
+  PRIVATE ${MPI_CXX_LINK_FLAGS} ${MPI_CXX_LIBRARIES})
+target_link_libraries(${EXECUTABLE} PUBLIC NESO-Particles::NESO-Particles)
 
 # define the test executable as a sycl target
 add_sycl_to_target(TARGET ${EXECUTABLE} SOURCES ${EXECUTABLE_SOURCE})
