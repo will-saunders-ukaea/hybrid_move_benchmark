@@ -1,11 +1,11 @@
 #include <iostream>
 #include <mpi.h>
+#define NESO_PARTICLES_PROFILING_REGION
 #include <neso_particles.hpp>
 #include <chrono>
 #include <cmath>
 #include <string>
 
-using namespace cl;
 using namespace NESO::Particles;
 
 inline void hybrid_move_driver(
@@ -33,7 +33,7 @@ inline void hybrid_move_driver(
   dims[1] = Ncells;
 
   // Halo width for local move.
-  const int stencil_width = 2;
+  const int stencil_width = 1;
   // Create the mesh.
   auto mesh = std::make_shared<CartesianHMesh>(MPI_COMM_WORLD, ndim, dims, cell_extent,
                       subdivision_order, stencil_width);
@@ -162,8 +162,9 @@ inline void hybrid_move_driver(
   }
   
   // Uncomment to write a trajectory.
-  //H5Part h5part("traj.h5part", A, Sym<REAL>("P"), Sym<REAL>("V"), Sym<INT>("CELL_ID"), Sym<INT>("ID"));
+  // H5Part h5part("particle_trajectory.h5part", A, Sym<REAL>("P"), Sym<REAL>("V"), Sym<INT>("ID"));
 
+  sycl_target->profile_map.enable();
   REAL T = 0.0;
   for (int stepx = 0; stepx < Nsteps_warmup; stepx++) {
     
@@ -182,7 +183,7 @@ inline void hybrid_move_driver(
     }
 
     // Uncomment to write a trajectory.
-    //h5part.write();
+    // h5part.write();
     
     // Execute the advection particle loop.
     // advect_loop->execute();
@@ -194,9 +195,12 @@ inline void hybrid_move_driver(
       std::cout << stepx << std::endl;
     }
   }
+  sycl_target->profile_map.disable();
+  sycl_target->profile_map.write_events_json("hybrid_move_benchmark", rank);
+
 
   // Uncomment to write a trajectory.
-  //h5part.close();
+  // h5part.close();
   MPI_Barrier(sycl_target->comm_pair.comm_parent);
   sycl_target->profile_map.reset();
 
