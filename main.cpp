@@ -9,6 +9,7 @@
 using namespace NESO::Particles;
 
 inline void hybrid_move_driver(
+  const int stencil_width,
   const bool single_cell_mode,
   const int N_total, 
   const int Ncells = 16,
@@ -33,7 +34,6 @@ inline void hybrid_move_driver(
   dims[1] = Ncells;
 
   // Halo width for local move.
-  const int stencil_width = 1;
   // Create the mesh.
   auto mesh = std::make_shared<CartesianHMesh>(MPI_COMM_WORLD, ndim, dims, cell_extent,
                       subdivision_order, stencil_width);
@@ -196,7 +196,28 @@ inline void hybrid_move_driver(
     }
   }
   sycl_target->profile_map.disable();
-  sycl_target->profile_map.write_events_json("hybrid_move_benchmark", rank);
+
+
+  const int t_local_sendcount = sycl_target->profile_map.profile["LocalMove"]["send_count"].value_integral;
+  int local_sendcount;
+  MPICHK(
+    MPI_Reduce(&t_local_sendcount, &local_sendcount, 1,
+               MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD)
+  );
+
+  const int t_global_sendcount = sycl_target->profile_map.profile["GlobalMove"]["send_count"].value_integral;
+  int global_sendcount;
+  MPICHK(
+    MPI_Reduce(&t_global_sendcount, &global_sendcount, 1,
+               MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD)
+  );
+
+  if (!rank){
+    nprint("LocalMove::send_count: ", local_sendcount);
+    nprint("GlobalMove::send_count:", global_sendcount);
+  }
+
+  sycl_target->profile_map.write_events_json("hybrid_move_benchmark_" + std::to_string(stencil_width), rank);
 
 
   // Uncomment to write a trajectory.
@@ -283,16 +304,16 @@ int main(int argc, char **argv) {
     return -1;
   }
   
-  const int nargs = 5;
+  const int nargs = 6;
   if (argc > nargs){
     std::vector<int> argsi(nargs);
     for(int ix=0 ; ix<nargs ; ix++){
       std::string argv0 = std::string(argv[ix+1]);
       argsi.at(ix) = std::stoi(argv0);
     }
-    hybrid_move_driver((bool) argsi.at(0), argsi.at(1), argsi.at(2), argsi.at(3), argsi.at(4));
+    hybrid_move_driver(argsi.at(0), (bool) argsi.at(1), argsi.at(2), argsi.at(3), argsi.at(4), argsi.at(5));
   } else {
-    nprint("Insufficient number of arguments. Please pass: <mode> <number of particles> <number of cells> <number of warmup steps> <number of timed steps>.");
+    nprint("Insufficient number of arguments. Please pass: <stencil_width> <cell mode> <number of particles> <number of cells> <number of warmup steps> <number of timed steps>.");
   }
 
 
