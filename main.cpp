@@ -125,18 +125,25 @@ inline void hybrid_move_driver(
   auto advect_pbc_loop = particle_loop(
     "AvectionPBC",
     A,
-    [=](auto V, auto P, auto EXTENTS){
-      for(int dx=0 ; dx<ndim ; dx++){
-        const REAL p_old = P.at(dx);
-        const REAL p_new = p_old + dt * V.at(dx);
-        const REAL tmp_extent = EXTENTS.at(dx);
-        const int n_extent_offset_int = abs((int)p_new);
-        const REAL n_extent_offset_real = n_extent_offset_int + 2;
-        const REAL p_pbc = 
-          fmod(p_new + n_extent_offset_real * tmp_extent, tmp_extent);
-        P.at(dx) = p_pbc;
+    Kernel::Kernel(
+      [=](auto V, auto P, auto EXTENTS){
+        for(int dx=0 ; dx<ndim ; dx++){
+          const REAL p_old = P.at(dx);
+          const REAL p_new = p_old + dt * V.at(dx);
+          const REAL tmp_extent = EXTENTS.at(dx);
+          const int n_extent_offset_int = abs((int)p_new);
+          const REAL n_extent_offset_real = n_extent_offset_int + 2;
+          const REAL p_pbc = 
+            fmod(p_new + n_extent_offset_real * tmp_extent, tmp_extent);
+          P.at(dx) = p_pbc;
+        }
+      },
+      {
+        0,
+        ndim * 3 * sizeof(REAL), // num bytes
+        ndim * 6, // num flops (assuming abs and fmod is 1 flop)
       }
-    },
+    ),
     Access::read(Sym<REAL>("V")),
     Access::write(Sym<REAL>("P")),
     Access::read(la_extents)
@@ -147,11 +154,18 @@ inline void hybrid_move_driver(
   auto advect_loop = particle_loop(
     "Avection",
     A,
-    [=](auto V, auto P){
-      for(int dx=0 ; dx<ndim ; dx++){
-        P[dx] += dt * V[dx];
+    Kernel::Kernel(
+      [=](auto V, auto P){
+        for(int dx=0 ; dx<ndim ; dx++){
+          P[dx] += dt * V[dx];
+        }
+      },
+      {
+        0,
+        ndim * 3 * sizeof(REAL),
+        ndim * 2
       }
-    },
+    ),
     Access::read(Sym<REAL>("V")),
     Access::write(Sym<REAL>("P"))
   );
