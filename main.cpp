@@ -138,11 +138,10 @@ inline void hybrid_move_driver(
           P.at(dx) = p_pbc;
         }
       },
-      {
-        0,
-        ndim * 3 * sizeof(REAL), // num bytes
-        ndim * 6, // num flops (assuming abs and fmod is 1 flop)
-      }
+      Kernel::Metadata(
+        Kernel::NumBytes(ndim * 3 * sizeof(REAL)),
+        Kernel::NumFLOP(ndim * 6)
+      )
     ),
     Access::read(Sym<REAL>("V")),
     Access::write(Sym<REAL>("P")),
@@ -160,11 +159,10 @@ inline void hybrid_move_driver(
           P[dx] += dt * V[dx];
         }
       },
-      {
-        0,
-        ndim * 3 * sizeof(REAL),
-        ndim * 2
-      }
+      Kernel::Metadata(
+        Kernel::NumBytes(ndim * 3 * sizeof(REAL)),
+        Kernel::NumFLOP(ndim * 2)
+      )
     ),
     Access::read(Sym<REAL>("V")),
     Access::write(Sym<REAL>("P"))
